@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>事故因果时间线工作台</title>
+<style>
+:root {
+  --bg: #0f1420; --panel: #171e2e; --panel2: #1d263a; --line: #2a3650;
+  --text: #e6ecf7; --muted: #8b98b3; --accent: #5b9dff; --accent2: #35d07f;
+  --warn: #ffb454; --danger: #ff6b6b; --chip: #243049;
+}
+* { box-sizing: border-box; }
+body { margin:0; font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;
+  background:var(--bg); color:var(--text); }
+header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex;
+  align-items:center; gap:16px; background:var(--panel); }
+header h1 { font-size:18px; margin:0; }
+header .sub { color:var(--muted); font-size:12px; }
+button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 14px;
+  font-size:13px; cursor:pointer; }
+button.secondary { background:var(--chip); color:var(--text); }
+button.danger { background:var(--danger); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+input,textarea,select { background:#101626; color:var(--text); border:1px solid var(--line);
+  border-radius:6px; padding:8px; font-size:13px; font-family:inherit; width:100%; }
+textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+.layout { display:grid; grid-template-columns:260px 1fr 320px; gap:14px; padding:14px;
+  height:calc(100vh - 56px); }
+.col { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px;
+  overflow:auto; min-height:0; }
+.col h2 { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;
+  margin:0 0 10px; }
+.inc-item { padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:6px;
+  border:1px solid transparent; }
+.inc-item:hover { background:var(--panel2); }
+.inc-item.active { background:var(--panel2); border-color:var(--accent); }
+.inc-item .title { font-weight:600; }
+.inc-item .meta { color:var(--muted); font-size:12px; }
+.toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+.seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.seg button { background:transparent; color:var(--muted); border-radius:0; padding:6px 12px; }
+.seg button.active { background:var(--accent); color:#fff; }
+.ev-card { background:var(--panel2); border:1px solid var(--line); border-left-width:3px;
+  border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+.ev-card.selected { outline:2px solid var(--accent); }
+.ev-card.pick { outline:2px dashed var(--warn); }
+.ev-card.revoked { opacity:.5; text-decoration:line-through; }
+.ev-card .row1 { display:flex; justify-content:space-between; gap:8px; }
+.ev-card .src { font-weight:600; color:var(--accent); }
+.ev-card .time { color:var(--muted); font-size:12px; font-family:ui-monospace,monospace; }
+.ev-card .raw { color:var(--muted); font-size:12px; margin-top:4px;
+  max-height:42px; overflow:hidden; font-family:ui-monospace,monospace; }
+.chip { display:inline-block; background:var(--chip); border-radius:10px; padding:1px 8px;
+  font-size:11px; color:var(--muted); margin-right:6px; }
+.chip.dup { color:var(--warn); }
+.chip.corr { color:var(--accent2); }
+.edge-item { background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+  padding:9px 10px; margin-bottom:8px; }
+.edge-item .pair { font-weight:600; margin-bottom:3px; }
+.edge-item .why { color:var(--muted); font-size:12px; }
+.edge-item.removed { opacity:.45; }
+.modal-back { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+  align-items:center; justify-content:center; z-index:20; }
+.modal-back.open { display:flex; }
+.modal { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px;
+  width:min(680px,92vw); max-height:86vh; overflow:auto; }
+.modal h3 { margin:0 0 12px; }
+.field { margin-bottom:10px; }
+.field label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+.tabs { display:flex; gap:6px; margin:10px 0; }
+.tabs button { background:var(--chip); }
+.tabs button.active { background:var(--accent); }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th,td { text-align:left; padding:5px 7px; border-bottom:1px solid var(--line); }
+pre { background:#101626; border:1px solid var(--line); border-radius:6px; padding:9px;
+  font-size:12px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+.muted { color:var(--muted); }
+.msg { position:fixed; bottom:18px; right:18px; z-index:40; display:flex; flex-direction:column;
+  gap:8px; }
+.toast { background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--accent);
+  padding:10px 14px; border-radius:8px; max-width:380px; }
+.toast.err { border-left-color:var(--danger); }
+.banner { padding:8px 12px; background:#2a2113; border:1px solid #4a3a1c; border-radius:8px;
+  color:var(--warn); font-size:12px; margin-bottom:10px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>因果时间线</h1>
+  <span class="sub">事故因果时间线工作台 · 原始事实只追加、不可改写</span>
+  <span style="flex:1"></span>
+  <button class="secondary" onclick="openImport()">批量导入事件</button>
+  <button onclick="openNewIncident()">新建事故</button>
+</header>
+
+<div class="layout">
+  <div class="col">
+    <h2>事故</h2>
+    <div id="incidentList"><div class="muted">加载中…</div></div>
+  </div>
+
+  <div class="col">
+    <div class="toolbar">
+      <div class="seg" id="sortSeg">
+        <button data-sort="reception" class="active">原始接收顺序</button>
+        <button data-sort="original">原始时间</button>
+        <button data-sort="corrected">校正后时间</button>
+      </div>
+      <span style="flex:1"></span>
+      <button class="secondary" id="pickToggle" onclick="togglePickMode()">选择两个事件连边</button>
+      <span class="muted" id="pickHint">也可拖动一张事件卡到另一张建立因果关系</span>
+    </div>
+    <div class="banner" id="conflictBanner"></div>
+    <div id="timeline"><div class="muted">请选择或新建一个事故。</div></div>
+  </div>
+
+  <div class="col">
+    <h2>先后 / 因果边</h2>
+    <div id="edgeList"><div class="muted">暂无边。</div></div>
+  </div>
+</div>
+
+<div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBody"></div>
+</div>
+<div class="msg" id="toasts"></div>
+<script>
+"use strict";
+const state = {
+  incidents: [], incidentId: null, view: null, sort: "reception",
+  picked: [], dragId: null, pickMode: false,
+};
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  const text = await res.text();
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch (_) { data = { error: text }; } }
+  if (!res.ok) {
+    const err = new Error((data && data.error) || ("HTTP " + res.status));
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+function toast(msg, isErr) {
+  const box = document.getElementById("toasts");
+  const el = document.createElement("div");
+  el.className = "toast" + (isErr ? " err" : "");
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 5200);
+}
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmt(s) { return s ? esc(s) : '<span class="muted">—</span>'; }
+
+async function loadIncidents(selectId) {
+  state.incidents = await api("GET", "/api/incidents");
+  const box = document.getElementById("incidentList");
+  if (!state.incidents.length) {
+    box.innerHTML = '<div class="muted">还没有事故，点击右上角新建。</div>';
+  } else {
+    box.innerHTML = state.incidents.map(i => `
+      <div class="inc-item ${i.id === state.incidentId ? "active" : ""}" onclick="selectIncident('${i.id}')">
+        <div class="title">${esc(i.title)}</div>
+        <div class="meta">${i.event_count} 个事件 · ${i.edge_count} 条边</div>
+      </div>`).join("");
+  }
+  if (selectId) { state.incidentId = selectId; }
+  if (state.incidentId && !state.incidents.some(i => i.id === state.incidentId)) {
+    state.incidentId = null; state.view = null; renderTimeline();
+  }
+  if (!state.incidentId && state.incidents.length) state.incidentId = state.incidents[0].id;
+  if (state.incidentId) await loadView();
+}
+
+async function selectIncident(id) {
+  state.incidentId = id; state.picked = [];
+  await loadIncidents();
+}
+
+async function loadView() {
+  if (!state.incidentId) { renderTimeline(); return; }
+  state.view = await api("GET", "/api/incidents/" + state.incidentId + "?sort=" + state.sort);
+  renderTimeline();
+  renderEdges();
+}
+
+function label(ev) {
+  return esc(ev.source) + "/" + esc(ev.event_id);
+}
+
+function renderTimeline() {
+  const box = document.getElementById("timeline");
+  document.getElementById("conflictBanner").style.display = "none";
+  if (!state.view) { box.innerHTML = '<div class="muted">请选择或新建一个事故。</div>'; return; }
+  if (!state.view.events.length) {
+    box.innerHTML = '<div class="muted">该事故还没有事件，点击右上角“批量导入事件”。</div>';
+    return;
+  }
+  box.innerHTML = state.view.events.map(ev => {
+    const at = state.sort === "reception" ? ev.first_seen_at
+      : state.sort === "original" ? (ev.versions[0] && ev.versions[0].occurred_at)
+      : ev.versions[ev.current_version - 1].occurred_at;
+    const corrected = ev.current_version > 1;
+    let raw = "";
+    try { raw = JSON.stringify(JSON.parse(ev.raw), null, 0); } catch (_) { raw = ev.raw; }
+    return `
+    <div class="ev-card ${ev.revoked ? "revoked" : ""} ${state.picked.includes(ev.id) ? "selected" : ""}"
+         draggable="${ev.revoked ? "false" : "true"}"
+         onclick="onCardClick('${ev.id}')"
+         ondragstart="onDragStart(event,'${ev.id}')"
+         ondragover="onDragOver(event)"
+         ondragleave="this.classList.remove('pick')"
+         ondrop="onDrop(event,'${ev.id}')">
+      <div class="row1">
+        <span class="src">${label(ev)}</span>
+        <span class="time">${esc(at || "")}</span>
+      </div>
+      <div class="raw">${esc(raw.length > 160 ? raw.slice(0, 160) + " …" : raw)}</div>
+      <div style="margin-top:5px">
+        <span class="chip">接收 #${ev.seq}</span>
+        <span class="chip ${ev.receive_count > 1 ? "dup" : ""}">投递 ${ev.receive_count} 次</span>
+        ${corrected ? '<span class="chip corr">已校正 v' + ev.current_version + "</span>" : ""}
+        ${ev.revoked ? '<span class="chip">已撤销</span>' : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderEdges() {
+  const box = document.getElementById("edgeList");
+  const edges = (state.view && state.view.edges) || [];
+  const active = edges.filter(e => !e.removed_at);
+  if (!active.length) { box.innerHTML = '<div class="muted">暂无边。</div>'; return; }
+  const evById = Object.fromEntries(state.view.events.map(e => [e.id, e]));
+  box.innerHTML = active.map(e => {
+    const c = evById[e.cause_id], t = evById[e.effect_id];
+    return `<div class="edge-item">
+      <div class="pair">${c ? label(c) : esc(e.cause_id)} <span class="muted">→</span> ${t ? label(t) : esc(e.effect_id)}</div>
+      <div class="why">${esc(e.rationale)}</div>
+      <div style="margin-top:6px"><button class="secondary" onclick="removeEdge('${e.id}')">删除该边</button></div>
+    </div>`;
+  }).join("");
+}
+
+function onDragStart(ev, id) {
+  state.dragId = id;
+  ev.dataTransfer.setData("text/plain", id);
+  ev.dataTransfer.effectAllowed = "link";
+}
+function onDragOver(ev) { ev.preventDefault(); ev.currentTarget.classList.add("pick"); }
+function onDrop(ev, targetId) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove("pick");
+  const causeId = state.dragId || ev.dataTransfer.getData("text/plain");
+  state.dragId = null;
+  if (causeId && causeId !== targetId) proposeEdge(causeId, targetId);
+}
+function onCardClick(id) {
+  if (state.pickMode) { onPickCard(id); return; }
+  openEventModal(id);
+}
+
+function togglePickMode() {
+  state.pickMode = !state.pickMode;
+  state.picked = [];
+  const btn = document.getElementById("pickToggle");
+  btn.textContent = state.pickMode ? "取消选择" : "选择两个事件连边";
+  btn.classList.toggle("secondary", !state.pickMode);
+  document.getElementById("pickHint").textContent = state.pickMode
+    ? "点选模式：先点原因事件，再点结果事件（顺序即因果方向）"
+    : "也可拖动一张事件卡到另一张建立因果关系";
+  renderTimeline();
+}
+
+function onPickCard(id) {
+  const ev = state.view.events.find(e => e.id === id);
+  if (!ev || ev.revoked) { toast("已撤销的事件不能连边", true); return; }
+  if (state.picked.includes(id)) {
+    state.picked = state.picked.filter(x => x !== id);
+  } else if (state.picked.length < 2) {
+    state.picked.push(id);
+  } else {
+    state.picked = [state.picked[1], id];
+  }
+  if (state.picked.length === 2) {
+    const [cause, effect] = state.picked;
+    state.picked = [];
+    renderTimeline();
+    proposeEdge(cause, effect);
+    return;
+  }
+  renderTimeline();
+}
+
+async function proposeEdge(causeId, effectId) {
+  const why = prompt("说明这条因果边为什么成立（因 → 果）：", "");
+  if (why === null) return;
+  try {
+    await api("POST", "/api/incidents/" + state.incidentId + "/edges",
+      { cause_id: causeId, effect_id: effectId, rationale: why.trim() });
+    toast("因果边已记录");
+    await loadView();
+  } catch (e) { showConflict(e); }
+}
+
+async function removeEdge(id) {
+  if (!confirm("删除（逻辑撤销）这条边？")) return;
+  await api("DELETE", "/api/edges/" + id);
+  toast("边已删除");
+  await loadView();
+}
+
+function showConflict(e) {
+  const b = document.getElementById("conflictBanner");
+  b.style.display = "block";
+  b.textContent = "请求被拒绝：" + e.message;
+  toast(e.message, true);
+}
+
+function modal(html) {
+  document.getElementById("modalBody").innerHTML = html;
+  document.getElementById("modalBack").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("modalBack").classList.remove("open");
+}
+
+function openNewIncident() {
+  modal(`<h3>新建事故</h3>
+    <div class="field"><label>事故标题</label><input id="fTitle" placeholder="例如：2026-09-21 支付网关超时"></div>
+    <div style="text-align:right">
+      <button class="secondary" onclick="closeModal()">取消</button>
+      <button onclick="submitNewIncident()">创建</button>
+    </div>`);
+  setTimeout(() => document.getElementById("fTitle").focus(), 0);
+}
+
+async function submitNewIncident() {
+  const title = document.getElementById("fTitle").value.trim();
+  if (!title) return;
+  try {
+    const inc = await api("POST", "/api/incidents", { title });
+    closeModal(); toast("事故已创建");
+    await loadIncidents(inc.id);
+  } catch (e) { toast(e.message, true); }
+}
+
+const SAMPLE = JSON.stringify([
+  { source: "pay-gateway", event_id: "evt-001", payload: { occurred_at: "2026-09-21T10:02:00Z", level: "error", message: "upstream timeout" } },
+  { source: "orders-db", event_id: "evt-002", payload: { occurred_at: "2026-09-21T10:01:30Z", level: "warn", message: "connection pool saturated" } },
+  { source: "deploy", event_id: "evt-003", payload: { occurred_at: "2026-09-21T09:58:00Z", type: "rollout", version: "v2.4.1" } }
+], null, 2);
+
+function openImport() {
+  if (!state.incidentId) { toast("请先选择或新建事故", true); return; }
+  modal(`<h3>批量导入事件</h3>
+    <p class="muted">粘贴 JSON 数组，每行一个事件：source、event_id 与 payload（payload 内必须有 RFC3339 的 occurred_at）。
+      同一 (source, event_id) 重送只增加接收次数，原始事实不会被覆盖。单行失败不影响其他行。</p>
+    <div class="field"><textarea id="fBatch" rows="12">${SAMPLE}</textarea></div>
+    <div style="text-align:right">
+      <button class="secondary" onclick="closeModal()">取消</button>
+      <button onclick="submitImport()">导入</button>
+    </div>
+    <div id="importResult" style="margin-top:12px"></div>`);
+}
+
+async function submitImport() {
+  const raw = document.getElementById("fBatch").value;
+  let events;
+  try { events = JSON.parse(raw); }
+  catch (e) { toast("JSON 解析失败：" + e.message, true); return; }
+  if (!Array.isArray(events)) { toast("最外层必须是 JSON 数组", true); return; }
+  try {
+    const res = await api("POST", "/api/incidents/" + state.incidentId + "/events/batch", { events });
+    const html = `<h3>导入结果</h3>
+      <p>共 ${res.total} 行，入库 ${res.accepted}，失败 ${res.failed}。</p>
+      <table><thead><tr><th>行</th><th>source/event_id</th><th>结果</th></tr></thead><tbody>
+      ${res.results.map(r => `<tr>
+        <td>${r.line}</td>
+        <td>${esc(r.source || "")}/${esc(r.event_id || "")}${r.duplicate ? ' <span class="chip dup">重复投递</span>' : ""}</td>
+        <td>${r.ok ? '<span style="color:var(--accent2)">✓ 入库</span>' : '<span style="color:var(--danger)">✗ ' + esc(r.error) + "</span>"}</td>
+      </tr>`).join("")}
+      </tbody></table>
+      <div style="text-align:right;margin-top:10px">
+        <button onclick="closeModal();loadIncidents()">完成</button>
+      </div>`;
+    document.getElementById("importResult").innerHTML = html;
+    toast(`导入完成：${res.accepted}/${res.total} 入库`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function openEventModal(id) {
+  const ev = await api("GET", "/api/events/" + id);
+  const rawPretty = JSON.stringify(JSON.parse(ev.raw), null, 2);
+  modal(`<h3>${label(ev)} <span class="chip">v${ev.current_version}</span></h3>
+    <div class="tabs">
+      <button class="active" onclick="tab(event,'rawTab')">原始事实</button>
+      <button onclick="tab(event,'verTab')">时间版本 (${ev.versions.length})</button>
+      <button onclick="tab(event,'rcptTab')">接收历史 (${ev.receive_count})</button>
+    </div>
+    <div id="rawTab">
+      <pre>${esc(rawPretty)}</pre>
+      <p class="muted">原始 JSON 在首次接收后永不修改；重复投递只追加接收记录。</p>
+    </div>
+    <div id="verTab" style="display:none">
+      <table><thead><tr><th>版本</th><th>occurred_at</th><th>说明</th><th>建立时间</th></tr></thead><tbody>
+      ${ev.versions.map(v => `<tr${v.version === ev.current_version ? ' style="color:var(--accent2)"' : ""}>
+        <td>v${v.version}${v.version === ev.current_version ? " ★" : ""}</td>
+        <td>${esc(v.occurred_at)}</td><td>${esc(v.note || "")}</td><td>${esc(v.created_at)}</td></tr>`).join("")}
+      </tbody></table>
+      <h3 style="margin-top:16px;font-size:14px">提交时间校正</h3>
+      <div class="field"><label>新的 occurred_at（RFC3339，如 2026-09-21T10:05:00Z）</label>
+        <input id="fNewAt" placeholder="2026-09-21T10:05:00Z"></div>
+      <div class="field"><label>校正理由</label><input id="fNewNote"></div>
+      <p class="muted">将基于当前版本 v${ev.current_version} 提交；若期间他人已校正，请求会得到 409 冲突而不是覆盖。</p>
+      <button onclick="submitCorrect('${ev.id}', ${ev.current_version})">提交新版本</button>
+    </div>
+    <div id="rcptTab" style="display:none">
+      <table><thead><tr><th>接收序号</th><th>接收时间(UTC)</th><th>原因</th></tr></thead><tbody>
+      ${ev.receipts.map(r => `<tr><td>#${r.seq}</td><td>${esc(r.at)}</td><td>${esc(r.reason || "")}</td></tr>`).join("")}
+      </tbody></table>
+    </div>
+    <div style="margin-top:16px;text-align:right">
+      ${ev.revoked ? '<span class="chip">已逻辑撤销</span>' :
+        `<button class="danger" onclick="revokeEvent('${ev.id}')">逻辑撤销该事件</button>`}
+      <button class="secondary" onclick="closeModal()">关闭</button>
+    </div>`);
+}
+
+function tab(ev, id) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+  ev.currentTarget.classList.add("active");
+  ["rawTab", "verTab", "rcptTab"].forEach(t =>
+    document.getElementById(t).style.display = t === id ? "" : "none");
+}
+
+async function submitCorrect(id, expected) {
+  const occurredAt = document.getElementById("fNewAt").value.trim();
+  const note = document.getElementById("fNewNote").value.trim();
+  if (!occurredAt) { toast("请填写新的 occurred_at", true); return; }
+  try {
+    await api("POST", "/api/events/" + id + "/correct",
+      { occurred_at: occurredAt, note, expected_version: expected });
+    toast("新版本已写入（旧版本保留）");
+    await loadView();
+    openEventModal(id);
+  } catch (e) {
+    toast(e.status === 409 ? "版本冲突：" + e.message : e.message, true);
+  }
+}
+
+async function revokeEvent(id) {
+  if (!confirm("逻辑撤销该事件？被有效边引用的事件无法撤销。")) return;
+  try {
+    await api("POST", "/api/events/" + id + "/revoke", {});
+    toast("事件已逻辑撤销");
+    closeModal(); await loadView();
+  } catch (e) { toast(e.message, true); }
+}
+
+document.getElementById("sortSeg").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#sortSeg button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  state.sort = btn.dataset.sort;
+  await loadView();
+});
+
+loadIncidents().catch(e => toast(e.message, true));
+</script>
+</body>
+</html>
