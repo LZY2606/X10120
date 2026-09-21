@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>因果时间线工作台</title>
+<style>
+:root { --bg:#0f1420; --panel:#181f2e; --panel2:#1f283a; --line:#2c3850; --fg:#e6ecf5; --muted:#93a1b8; --accent:#5b9dff; --good:#39c08a; --warn:#e8a13a; --bad:#ef6a6a; }
+* { box-sizing: border-box; }
+body { margin:0; font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--panel); }
+header h1 { font-size:18px; margin:0; }
+.badge { color:var(--muted); font-size:12px; }
+main { padding:16px 20px; display:grid; grid-template-columns: 300px 1fr; gap:16px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+.panel h2 { font-size:14px; margin:0 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.row { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+input,textarea,select,button { font:inherit; }
+input[type=text],input[type=datetime-local],textarea,select { background:var(--panel2); border:1px solid var(--line); color:var(--fg); border-radius:7px; padding:7px 9px; }
+textarea { width:100%; min-height:130px; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+button { background:var(--accent); color:#06101f; border:0; border-radius:7px; padding:7px 12px; cursor:pointer; font-weight:600; }
+button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:400; }
+button.danger { background:var(--bad); color:#210b0b; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+ul.clean { list-style:none; margin:0; padding:0; }
+.inc { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; cursor:pointer; }
+.inc.active { border-color:var(--accent); background:var(--panel2); }
+.inc .t { font-weight:600; }
+.inc .m { color:var(--muted); font-size:12px; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.evt { border:1px solid var(--line); border-radius:8px; padding:9px 10px; margin-bottom:8px; background:var(--panel2); cursor:pointer; }
+.evt.selected { outline:2px solid var(--accent); }
+.evt.from-sel { border-left:4px solid var(--good); }
+.evt.to-sel { border-left:4px solid var(--warn); }
+.evt.revoked { opacity:.55; text-decoration:line-through; }
+.evt .meta { color:var(--muted); font-size:12px; }
+.tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; margin-right:6px; }
+.tag.dup { background:#3a3320; color:var(--warn); }
+.tag.corr { background:#1d3545; color:#7fc4ff; }
+.tag.rev { background:#3c2222; color:var(--bad); }
+.edge { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; background:var(--panel2); }
+.edge .kind { font-size:11px; padding:1px 7px; border-radius:99px; background:#233; color:#9fd8c0; margin-right:6px; }
+.edge .why { color:var(--muted); font-size:12px; margin-top:3px; }
+.muted { color:var(--muted); }
+#toast { position:fixed; right:18px; bottom:18px; max-width:430px; display:flex; flex-direction:column; gap:8px; z-index:50; }
+.toast { padding:10px 13px; border-radius:9px; border:1px solid var(--line); background:var(--panel); box-shadow:0 8px 30px rgba(0,0,0,.4); white-space:pre-wrap; }
+.toast.err { border-color:var(--bad); }
+.toast.ok { border-color:var(--good); }
+dialog { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:12px; width:min(760px,92vw); padding:0; }
+dialog::backdrop { background:rgba(5,8,14,.6); }
+.dlg-head { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+.dlg-body { padding:16px 18px; max-height:70vh; overflow:auto; }
+pre { background:#0c111b; border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; font-size:12px; }
+table { border-collapse:collapse; width:100%; font-size:12px; }
+th,td { border-bottom:1px solid var(--line); padding:5px 7px; text-align:left; vertical-align:top; }
+th { color:var(--muted); font-weight:600; }
+.imp-ok { color:var(--good); } .imp-bad { color:var(--bad); }
+.switch label { margin-right:14px; cursor:pointer; }
+.hint { font-size:12px; color:var(--muted); margin:4px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>因果时间线</h1>
+  <span class="badge">事故因果时间线工作台 · 追加式审计 · 本地数据</span>
+  <span style="flex:1"></span>
+  <button class="ghost" id="refreshBtn">刷新</button>
+</header>
+<main>
+  <div class="panel" id="leftPanel"></div>
+  <div class="panel" id="rightPanel"><p class="muted">请先在左侧新建或选择一个事故。</p></div>
+</main>
+<div id="toast"></div>
+<dialog id="dlg"></dialog>
+<script src="app.js"></script>
+</body>
+</html>
